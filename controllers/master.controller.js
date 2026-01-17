@@ -99,34 +99,34 @@ exports.getProductById = async (req, res) => {
 
 exports.createProduct = async (req, res) => {
     const { produk_name, kategori, unit, stock_qty, harga, deskripsi, img_path } = req.body;
-    
-    if (user_role !== 'Admin') {
-        return res.status(403).json({ 
-            success: false, 
-            message: "Akses Ditolak! Hanya Admin yang boleh tambah produk." 
-        });
-    }
 
     try {
-        const query = `INSERT INTO produk (produk_name, kategori, unit, stock_qty, harga, deskripsi, img_path) VALUES (?, ?, ?, ?, ?, ?, ?)`;
+        const query = `INSERT INTO produk (produk_name, kategori, unit, stock_qty, harga, deskripsi, img_path) 
+                       VALUES (?, ?, ?, ?, ?, ?, ?)`;
         
-        const [result] = await db.query(query, [produk_name, kategori, unit, stock_qty || 0, harga, deskripsi, img_path]);
-        
-        res.status(201).json({ success: true, message: "Produk berhasil ditambahkan", id: result.insertId });
+        await db.query(query, [produk_name, kategori, unit, stock_qty, harga, deskripsi, img_path]);
+
+        res.status(201).json({ 
+            success: true, 
+            message: "Produk berhasil ditambahkan" 
+        });
     } catch (error) {
+        console.error(error);
         res.status(500).json({ success: false, message: error.message });
     }
 };
-
+// Contoh perbaikan di master.controller.js (Node.js)
 exports.updateProduct = async (req, res) => {
     const { id } = req.params;
-    const { produk_name, kategori, unit, harga, deskripsi, img_path } = req.body;
+    const { produk_name, kategori, unit, stock_qty, harga, deskripsi, img_path } = req.body;
+
     try {
-        // Update data produk umum (biasanya stok diupdate lewat restock/transaksi, tapi kalau mau edit manual bisa ditambah di sini)
-        await db.query(`UPDATE produk SET produk_name=?, kategori=?, unit=?, harga=?, deskripsi=?, img_path=? WHERE produk_id=?`, 
-        [produk_name, kategori, unit, harga, deskripsi, img_path, id]);
-        res.json({ success: true, message: "Produk berhasil diupdate" });
+        const query = `UPDATE produk SET produk_name=?, kategori=?, unit=?, stock_qty=?, harga=?, deskripsi=?, img_path=? WHERE produk_id=?`;
+        await db.query(query, [produk_name, kategori, unit, stock_qty, harga, deskripsi, img_path, id]);
+        
+        res.json({ success: true, message: "Produk diperbarui" });
     } catch (error) {
+        console.error(error); // Lihat error di terminal Node.js
         res.status(500).json({ success: false, message: error.message });
     }
 };
@@ -134,13 +134,23 @@ exports.updateProduct = async (req, res) => {
 exports.deleteProduct = async (req, res) => {
     const { id } = req.params;
     try {
-        await db.query('DELETE FROM produk WHERE produk_id = ?', [id]);
+        // Tambahkan logging untuk melihat ID mana yang dikirim Android
+        console.log("Mencoba menghapus produk dengan ID:", id);
+
+        const [result] = await db.query('DELETE FROM produk WHERE produk_id = ?', [id]);
+        
+        // Cek apakah ada baris yang terhapus
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, message: "Produk tidak ditemukan" });
+        }
+
         res.json({ success: true, message: "Produk berhasil dihapus" });
     } catch (error) {
+        // Cetak error detail di console terminal Node.js Anda
+        console.error("SQL Error:", error.message);
         res.status(500).json({ success: false, message: error.message });
     }
 };
-
 // === TRANSAKSI & RESTOCK ===
 exports.restockProduct = async (req, res) => {
     const { id } = req.params;
@@ -152,10 +162,10 @@ exports.restockProduct = async (req, res) => {
     }
 
     try {
-        await db.query(`UPDATE produk SET stock_qty = stock_qty + ? WHERE produk_id = ?`, [qty_in, id]);
-        
+        await db.query("UPDATE produk SET stock_qty = stock_qty + ? WHERE produk_id = ?", [qty_in, id]); 
+
         const queryInsert = `INSERT INTO transaksi (produk_id, user_id, qty_out, tanggal, tipe) VALUES (?, NULL, ?, NOW(), 'masuk')`;
-        await db.query(queryInsert, [id, qty_in]); 
+        await db.query(queryInsert, [id, qty_in]);
 
         res.json({ success: true, message: "Stok berhasil ditambahkan" });
 
